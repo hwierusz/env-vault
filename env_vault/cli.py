@@ -1,95 +1,99 @@
+"""Main CLI entry-point for env-vault."""
+
 import sys
 import click
-from env_vault.storage import save_vault, load_vault, vault_exists, list_vaults
-from env_vault.crypto import encrypt, decrypt
+
+from env_vault.storage import load_vault, save_vault, vault_exists, list_vaults
+from env_vault.cli_export import export_cmd, import_cmd
 
 
 @click.group()
-def cli():
-    """env-vault: Manage environment variables with encrypted storage."""
-    pass
+def cli() -> None:
+    """env-vault — encrypted environment variable manager."""
 
 
 @cli.command()
-@click.argument("vault_name")
-@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True, help="Vault password")
-def init(vault_name, password):
-    """Initialize a new vault."""
-    if vault_exists(vault_name):
-        click.echo(f"Vault '{vault_name}' already exists.", err=True)
+@click.argument("project")
+@click.password_option(prompt="New vault password")
+def init(project: str, password: str) -> None:
+    """Initialise a new vault for PROJECT."""
+    if vault_exists(project):
+        click.echo(f"Error: vault '{project}' already exists.", err=True)
         sys.exit(1)
-    save_vault(vault_name, {}, password)
-    click.echo(f"Vault '{vault_name}' created.")
+    save_vault(project, {}, password)
+    click.echo(f"Vault '{project}' created.")
 
 
-@cli.command()
-@click.argument("vault_name")
+@cli.command(name="set")
+@click.argument("project")
 @click.argument("key")
 @click.argument("value")
-@click.option("--password", prompt=True, hide_input=True, help="Vault password")
-def set(vault_name, key, value, password):
-    """Set an environment variable in a vault."""
-    if not vault_exists(vault_name):
-        click.echo(f"Vault '{vault_name}' does not exist.", err=True)
+@click.password_option("--password", prompt="Vault password", confirmation_prompt=False)
+def set(project: str, key: str, value: str, password: str) -> None:
+    """Set KEY=VALUE in PROJECT vault."""
+    if not vault_exists(project):
+        click.echo(f"Error: vault '{project}' does not exist.", err=True)
         sys.exit(1)
     try:
-        data = load_vault(vault_name, password)
+        data = load_vault(project, password)
     except Exception:
-        click.echo("Failed to unlock vault. Wrong password?", err=True)
+        click.echo("Error: failed to decrypt vault. Wrong password?", err=True)
         sys.exit(1)
     data[key] = value
-    save_vault(vault_name, data, password)
-    click.echo(f"Set '{key}' in vault '{vault_name}'.")
+    save_vault(project, data, password)
+    click.echo(f"Set '{key}' in vault '{project}'.")
 
 
 @cli.command(name="get")
-@click.argument("vault_name")
+@click.argument("project")
 @click.argument("key")
-@click.option("--password", prompt=True, hide_input=True, help="Vault password")
-def get(vault_name, key, password):
-    """Get an environment variable from a vault."""
-    if not vault_exists(vault_name):
-        click.echo(f"Vault '{vault_name}' does not exist.", err=True)
+@click.password_option("--password", prompt="Vault password", confirmation_prompt=False)
+def get(project: str, key: str, password: str) -> None:
+    """Get the value of KEY from PROJECT vault."""
+    if not vault_exists(project):
+        click.echo(f"Error: vault '{project}' does not exist.", err=True)
         sys.exit(1)
     try:
-        data = load_vault(vault_name, password)
+        data = load_vault(project, password)
     except Exception:
-        click.echo("Failed to unlock vault. Wrong password?", err=True)
+        click.echo("Error: failed to decrypt vault. Wrong password?", err=True)
         sys.exit(1)
     if key not in data:
-        click.echo(f"Key '{key}' not found in vault '{vault_name}'.", err=True)
+        click.echo(f"Error: key '{key}' not found.", err=True)
         sys.exit(1)
     click.echo(data[key])
 
 
 @cli.command(name="list")
-@click.argument("vault_name")
-@click.option("--password", prompt=True, hide_input=True, help="Vault password")
-def list_vars(vault_name, password):
-    """List all keys in a vault."""
-    if not vault_exists(vault_name):
-        click.echo(f"Vault '{vault_name}' does not exist.", err=True)
+@click.argument("project")
+@click.password_option("--password", prompt="Vault password", confirmation_prompt=False)
+def list_vars(project: str, password: str) -> None:
+    """List all variable names in PROJECT vault."""
+    if not vault_exists(project):
+        click.echo(f"Error: vault '{project}' does not exist.", err=True)
         sys.exit(1)
     try:
-        data = load_vault(vault_name, password)
+        data = load_vault(project, password)
     except Exception:
-        click.echo("Failed to unlock vault. Wrong password?", err=True)
+        click.echo("Error: failed to decrypt vault. Wrong password?", err=True)
         sys.exit(1)
     if not data:
-        click.echo("(empty vault)")
-    for k, v in data.items():
-        click.echo(f"{k}={v}")
+        click.echo("(no variables stored)")
+    else:
+        for k in sorted(data):
+            click.echo(k)
 
 
-@cli.command()
-def vaults():
+@cli.command(name="vaults")
+def vaults() -> None:
     """List all available vaults."""
     names = list_vaults()
     if not names:
-        click.echo("No vaults found.")
-    for name in names:
-        click.echo(name)
+        click.echo("(no vaults found)")
+    else:
+        for name in sorted(names):
+            click.echo(name)
 
 
-if __name__ == "__main__":
-    cli()
+cli.add_command(export_cmd, name="export")
+cli.add_command(import_cmd, name="import")

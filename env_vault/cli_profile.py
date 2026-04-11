@@ -68,14 +68,22 @@ def profile_get(vault: str, profile: str, key: str, password: str):
 @click.argument("vault")
 @click.argument("profile")
 @click.password_option("--password", "-p", prompt="Vault password", help="Vault password.")
-def profile_show(vault: str, profile: str, password: str):
-    """Show all variables in PROFILE of VAULT."""
+@click.option("--export", "export_format", is_flag=True, default=False, help="Output as export statements.")
+def profile_show(vault: str, profile: str, password: str, export_format: bool):
+    """Show all variables in PROFILE of VAULT.
+
+    Use --export to print variables as shell export statements
+    suitable for sourcing (e.g. eval $(env-vault profile show ...  --export)).
+    """
     try:
         vars_ = get_profile(vault, password, profile)
     except ProfileError as exc:
         raise click.ClickException(str(exc))
     for k, v in sorted(vars_.items()):
-        click.echo(f"{k}={v}")
+        if export_format:
+            click.echo(f"export {k}={v}")
+        else:
+            click.echo(f"{k}={v}")
 
 
 @profile_cmd.command("delete")

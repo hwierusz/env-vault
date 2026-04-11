@@ -61,6 +61,21 @@ def watch_vault(
     """Poll a vault for changes and invoke *callback* on each change.
 
     Blocks until *stop_event* is set (or forever if not provided).
+
+    Args:
+        vault_name: Name of the vault to watch.
+        password: Password used to decrypt the vault.
+        callback: Callable invoked with a :class:`WatchEvent` whenever
+            the vault contents change.
+        interval: Polling interval in seconds (default: 2.0).
+        stop_event: Optional :class:`threading.Event`; when set the
+            watcher exits the polling loop cleanly.
+        load_fn: Optional override for the vault-loading function,
+            primarily used in tests.
+
+    Raises:
+        WatchError: If the vault does not exist or cannot be read on
+            the initial load.
     """
     if not vault_exists(vault_name):
         raise WatchError(f"Vault '{vault_name}' does not exist.")

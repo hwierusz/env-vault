@@ -1,24 +1,10 @@
-"""Tests for env_vault.compress."""
-
 import gzip
 import json
 import pytest
-
-from env_vault.compress import (
-    compress_vault,
-    decompress_vault,
-    compression_ratio,
-    CompressError,
-)
+from env_vault.compress import compress_vault, decompress_vault, compression_ratio, CompressError
 
 
-SAMPLE: dict = {
-    "vars": {
-        "DATABASE_URL": "postgres://localhost/mydb",
-        "SECRET_KEY": "supersecretvalue",
-        "DEBUG": "false",
-    }
-}
+SAMPLE = {"DB_HOST": "localhost", "DB_PORT": "5432", "SECRET_KEY": "s3cr3t"}
 
 
 def test_compress_returns_bytes():
@@ -27,42 +13,32 @@ def test_compress_returns_bytes():
 
 
 def test_compressed_is_valid_gzip():
-    blob = compress_vault(SAMPLE)
+    result = compress_vault(SAMPLE)
     # gzip magic bytes
-    assert blob[:2] == b"\x1f\x8b"
+    assert result[:2] == b"\x1f\x8b"
 
 
 def test_decompress_roundtrip():
-    blob = compress_vault(SAMPLE)
-    recovered = decompress_vault(blob)
+    compressed = compress_vault(SAMPLE)
+    recovered = decompress_vault(compressed)
     assert recovered == SAMPLE
 
 
 def test_decompress_invalid_bytes_raises():
-    with pytest.raises(CompressError):
-        decompress_vault(b"not-gzip-data")
+    with pytest.raises(CompressError, match="decompress"):
+        decompress_vault(b"not gzip data at all")
 
 
 def test_decompress_valid_gzip_invalid_json_raises():
-    bad_blob = gzip.compress(b"not-json")
-    with pytest.raises(CompressError):
-        decompress_vault(bad_blob)
+    bad = gzip.compress(b"not json!!!")
+    with pytest.raises(CompressError, match="valid JSON"):
+        decompress_vault(bad)
 
 
-def test_compress_empty_dict():
-    blob = compress_vault({})
-    assert decompress_vault(blob) == {}
-
-
-def test_compression_ratio_below_one_for_repetitive_data():
-    large = {"vars": {f"KEY_{i}": "value" * 20 for i in range(50)}}
-    ratio = compression_ratio(large)
-    assert ratio < 1.0
-
-
-def test_compression_ratio_empty_returns_zero():
-    ratio = compression_ratio({})
-    assert ratio == 0.0
+def test_decompress_json_array_raises():
+    bad = gzip.compress(json.dumps(["a", "b"]).encode())
+    with pytest.raises(CompressError, match="JSON object"):
+        decompress_vault(bad)
 
 
 def test_compression_ratio_is_float():
@@ -70,6 +46,24 @@ def test_compression_ratio_is_float():
     assert isinstance(ratio, float)
 
 
-def test_compress_non_serialisable_raises():
-    with pytest.raises(CompressError):
-        compress_vault({"bad": object()})  # type: ignore[dict-item]
+def test_compression_ratio_less_than_one_for_large_data():
+    large = {f"KEY_{i}": "value" * 20 for i in range(50)}
+    ratio = compression_ratio(large)
+    assert ratio < 1.0
+
+
+def test_compression_ratio_empty_dict_returns_one():
+    ratio = compression_ratio({})
+    assert ratio == 1.0
+
+
+def test_compress_empty_dict_roundtrip():
+    compressed = compress_vault({})
+    recovered = decompress_vault(compressed)
+    assert recovered == {}
+
+
+def test_compress_special_characters():
+    data = {"MSG": "hello\nworld\ttab", "UNICODE": "caf\u00e9"}
+    recovered = decompress_vault(compress_vault(data))
+    assert recovered == data

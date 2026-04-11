@@ -1,35 +1,32 @@
-"""CLI commands for compressing and decompressing vault files."""
-
-import os
 import click
+from env_vault.storage import load_vault, save_vault, vault_exists
+from env_vault.compress import compress_vault, decompress_vault, compression_ratio, CompressError
+import os
 
-from .compress import compress_vault, decompress_vault, compression_ratio, CompressError
-from .storage import load_vault, vault_exists
 
-
-@click.group("compress")
-def compress_cmd() -> None:
-    """Compress or decompress vault archives."""
+@click.group(name="compress")
+def compress_cmd():
+    """Pack and unpack vault data using gzip compression."""
 
 
 @compress_cmd.command("pack")
 @click.argument("vault_name")
-@click.argument("output_path")
+@click.argument("output_file")
 @click.password_option(prompt="Vault password", confirmation_prompt=False)
-def pack(vault_name: str, output_path: str, password: str) -> None:
-    """Compress VAULT_NAME into a binary archive at OUTPUT_PATH."""
+def pack(vault_name: str, output_file: str, password: str):
+    """Compress VAULT_NAME into OUTPUT_FILE."""
     if not vault_exists(vault_name):
         click.echo(f"Error: vault '{vault_name}' does not exist.", err=True)
         raise SystemExit(1)
     try:
-        data = load_vault(vault_name, password)
-        blob = compress_vault(data)
-        with open(output_path, "wb") as fh:
-            fh.write(blob)
-        ratio = compression_ratio(data)
+        variables = load_vault(vault_name, password)
+        data = compress_vault(variables)
+        with open(output_file, "wb") as fh:
+            fh.write(data)
+        ratio = compression_ratio(variables)
         click.echo(
-            f"Packed '{vault_name}' → {output_path}  "
-            f"(ratio {ratio:.2%})"
+            f"Packed {len(variables)} variable(s) into '{output_file}' "
+            f"(ratio: {ratio:.2f})."
         )
     except CompressError as exc:
         click.echo(f"Error: {exc}", err=True)
@@ -37,26 +34,27 @@ def pack(vault_name: str, output_path: str, password: str) -> None:
 
 
 @compress_cmd.command("unpack")
-@click.argument("archive_path")
-@click.option("--show", is_flag=True, help="Print decompressed JSON to stdout.")
-def unpack(archive_path: str, show: bool) -> None:
-    """Decompress an archive created by 'pack' and display its contents."""
-    if not os.path.isfile(archive_path):
-        click.echo(f"Error: file '{archive_path}' not found.", err=True)
+@click.argument("input_file")
+@click.argument("vault_name")
+@click.password_option(prompt="Vault password", confirmation_prompt=False)
+@click.option("--overwrite", is_flag=True, default=False, help="Overwrite existing vault.")
+def unpack(input_file: str, vault_name: str, password: str, overwrite: bool):
+    """Decompress INPUT_FILE and store into VAULT_NAME."""
+    if vault_exists(vault_name) and not overwrite:
+        click.echo(
+            f"Error: vault '{vault_name}' already exists. Use --overwrite to replace it.",
+            err=True,
+        )
+        raise SystemExit(1)
+    if not os.path.isfile(input_file):
+        click.echo(f"Error: file '{input_file}' not found.", err=True)
         raise SystemExit(1)
     try:
-        with open(archive_path, "rb") as fh:
-            blob = fh.read()
-        data = decompress_vault(blob)
+        with open(input_file, "rb") as fh:
+            data = fh.read()
+        variables = decompress_vault(data)
+        save_vault(vault_name, password, variables)
+        click.echo(f"Unpacked {len(variables)} variable(s) into vault '{vault_name}'.")
     except CompressError as exc:
         click.echo(f"Error: {exc}", err=True)
         raise SystemExit(1)
-
-    if show:
-        import json
-        click.echo(json.dumps(data, indent=2))
-    else:
-        var_count = len(data.get("vars", {}))
-        click.echo(
-            f"Archive '{archive_path}' contains {var_count} variable(s)."
-        )

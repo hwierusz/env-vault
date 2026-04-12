@@ -38,6 +38,12 @@ def test_set_visibility_missing_key_raises(data):
         set_visibility(data, "NONEXISTENT", "public")
 
 
+def test_set_visibility_overwrites_existing_level(data):
+    set_visibility(data, "API_KEY", "hidden")
+    set_visibility(data, "API_KEY", "public")
+    assert data["__visibility__"]["API_KEY"] == "public"
+
+
 def test_get_visibility_returns_default_private(data):
     assert get_visibility(data, "APP_ENV") == "private"
 
@@ -81,6 +87,13 @@ def test_filter_by_visibility_include_higher(data):
 def test_filter_by_visibility_invalid_level_raises(data):
     with pytest.raises(VisibilityError, match="Invalid visibility level"):
         filter_by_visibility(data, "classified")
+
+
+def test_filter_by_visibility_returns_values(data):
+    """Ensure filter_by_visibility returns a mapping of key -> value, not just keys."""
+    set_visibility(data, "DEBUG", "public")
+    result = filter_by_visibility(data, "public")
+    assert result.get("DEBUG") == "false"
 
 
 def test_list_visibility_returns_explicit_entries(data):

@@ -53,6 +53,12 @@ def test_add_tag_missing_key_raises(mock_vault):
         add_tag(VAULT, PASS, "NONEXISTENT", "mytag")
 
 
+def test_add_tag_cannot_tag_meta_key(mock_vault):
+    """Tagging the internal metadata key itself should raise a TagError."""
+    with pytest.raises(TagError, match="not found"):
+        add_tag(VAULT, PASS, TAGS_META_KEY, "meta")
+
+
 def test_remove_tag(mock_vault):
     add_tag(VAULT, PASS, "DB_URL", "database")
     remove_tag(VAULT, PASS, "DB_URL", "database")

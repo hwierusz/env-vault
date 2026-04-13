@@ -19,6 +19,16 @@ class ConditionRule:
     value: Optional[str] = None
     result: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        if self.op not in CONDITION_OPS:
+            raise ConditionError(
+                f"Unsupported operator {self.op!r}. Choose from {CONDITION_OPS}."
+            )
+        if self.op != "exists" and self.value is None:
+            raise ConditionError(
+                f"Operator {self.op!r} requires a 'value' to compare against."
+            )
+
     def __repr__(self) -> str:  # pragma: no cover
         return f"ConditionRule({self.key!r} {self.op} {self.value!r} -> {self.result!r})"
 

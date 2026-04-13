@@ -44,6 +44,16 @@ def test_ns_assign_missing_key(runner, patched):
     assert "Error" in result.output
 
 
+def test_ns_assign_saves_vault(runner, patched):
+    """Ensure save_vault is called after a successful assign."""
+    mock_load, mock_save = patched
+    runner.invoke(
+        namespace_cmd, ["assign", "myvault", "PORT", "network"],
+        input=f"{PASSWORD}\n{PASSWORD}\n",
+    )
+    mock_save.assert_called_once()
+
+
 def test_ns_remove_success(runner, patched):
     result = runner.invoke(
         namespace_cmd, ["remove", "myvault", "DB_URL", "database"],

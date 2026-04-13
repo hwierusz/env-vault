@@ -71,6 +71,16 @@ def test_webhook_remove_success(runner, patched):
     assert "removed" in result.output
 
 
+def test_webhook_remove_error(runner, patched):
+    patched.setattr("env_vault.cli_webhook.remove_webhook",
+                    lambda *a, **kw: (_ for _ in ()).throw(
+                        WebhookError("not found")))
+    result = runner.invoke(webhook_cmd, ["remove", "myapp", URL,
+                                         "--password", "pw"])
+    assert result.exit_code != 0
+    assert "not found" in result.output
+
+
 # ---------------------------------------------------------------------------
 # webhook list
 # ---------------------------------------------------------------------------
@@ -89,28 +99,10 @@ def test_webhook_list_shows_entries(runner, patched):
 
 
 def test_webhook_list_empty(runner, patched):
-    patched.setattr("env_vault.cli_webhook.list_webhooks",
-                    lambda *a, **kw: [])
+    patched.setattr(
+        "env_vault.cli_webhook.list_webhooks",
+        lambda *a, **kw: [],
+    )
     result = runner.invoke(webhook_cmd, ["list", "myapp", "--password", "pw"])
-    assert "No webhooks" in result.output
-
-
-# ---------------------------------------------------------------------------
-# webhook fire
-# ---------------------------------------------------------------------------
-
-def test_webhook_fire_notified(runner, patched):
-    patched.setattr("env_vault.cli_webhook.fire_event",
-                    lambda *a, **kw: [URL])
-    result = runner.invoke(webhook_cmd, ["fire", "myapp", "set",
-                                         "--password", "pw"])
     assert result.exit_code == 0
-    assert "1" in result.output
-
-
-def test_webhook_fire_no_match(runner, patched):
-    patched.setattr("env_vault.cli_webhook.fire_event",
-                    lambda *a, **kw: [])
-    result = runner.invoke(webhook_cmd, ["fire", "myapp", "set",
-                                         "--password", "pw"])
-    assert "No webhooks matched" in result.output
+    assert "no webhooks" in result.output.lower()

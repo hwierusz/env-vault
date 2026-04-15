@@ -1,5 +1,6 @@
 """Search and filter environment variables across vaults."""
 
+import json
 import re
 from typing import Optional
 
@@ -49,7 +50,6 @@ def search_vars(
     except Exception as exc:
         raise SearchError(f"Failed to decrypt vault: {exc}") from exc
 
-    import json
     variables: dict = json.loads(decrypted)
 
     results = {}
@@ -60,3 +60,30 @@ def search_vars(
             results[key] = value
 
     return results
+
+
+def list_keys(vault_name: str, password: str) -> list:
+    """Return a sorted list of all variable keys in a vault.
+
+    Args:
+        vault_name: Name of the vault to inspect.
+        password: Password to decrypt the vault.
+
+    Returns:
+        A sorted list of variable key names.
+
+    Raises:
+        SearchError: If the vault cannot be opened or decrypted.
+    """
+    try:
+        vault_data = load_vault(vault_name)
+    except FileNotFoundError:
+        raise SearchError(f"Vault '{vault_name}' does not exist.")
+
+    try:
+        decrypted = decrypt(vault_data["data"], password)
+    except Exception as exc:
+        raise SearchError(f"Failed to decrypt vault: {exc}") from exc
+
+    variables: dict = json.loads(decrypted)
+    return sorted(variables.keys())

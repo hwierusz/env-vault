@@ -93,17 +93,17 @@ def test_remove_label_absent_is_noop():
 # list_labels
 # ---------------------------------------------------------------------------
 
-def test_list_labels_returns_labels():
+def test_list_labels_returns_all_labels():
     data = _base_data()
-    data["__labels__"] = {"API_KEY": ["sensitive", "rotate-monthly"]}
-    result = list_labels("v", "API_KEY", _make_load(data))
-    assert result == ["sensitive", "rotate-monthly"]
+    data["__labels__"] = {"DB_URL": ["production", "legacy"], "API_KEY": ["secret"]}
+    result = list_labels("v", _make_load(data))
+    assert result == {"DB_URL": ["production", "legacy"], "API_KEY": ["secret"]}
 
 
-def test_list_labels_empty_when_none():
+def test_list_labels_empty_when_no_labels():
     data = _base_data()
-    result = list_labels("v", "DB_URL", _make_load(data))
-    assert result == []
+    result = list_labels("v", _make_load(data))
+    assert result == {}
 
 
 # ---------------------------------------------------------------------------
@@ -112,16 +112,13 @@ def test_list_labels_empty_when_none():
 
 def test_find_by_label_returns_matching_keys():
     data = _base_data()
-    data["__labels__"] = {
-        "DB_URL": ["production"],
-        "API_KEY": ["production", "sensitive"],
-    }
+    data["__labels__"] = {"DB_URL": ["production"], "API_KEY": ["production", "secret"]}
     result = find_by_label("v", "production", _make_load(data))
-    assert set(result.keys()) == {"DB_URL", "API_KEY"}
+    assert set(result) == {"DB_URL", "API_KEY"}
 
 
-def test_find_by_label_empty_when_no_match():
+def test_find_by_label_no_matches_returns_empty():
     data = _base_data()
-    data["__labels__"] = {"DB_URL": ["staging"]}
-    result = find_by_label("v", "production", _make_load(data))
-    assert result == {}
+    data["__labels__"] = {"DB_URL": ["production"]}
+    result = find_by_label("v", "staging", _make_load(data))
+    assert result == []

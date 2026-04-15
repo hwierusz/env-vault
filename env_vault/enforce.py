@@ -1,80 +1,63 @@
-"""enforce.py — policy enforcement for vault variables."""
+"""Built-in enforcement policies for vault variables."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 
 class EnforceError(Exception):
-    """Raised when a policy cannot be applied."""
+    """Raised when a policy lookup fails."""
 
 
-@dataclass
 class PolicyViolation:
-    key: str
-    policy: str
-    message: str
+    def __init__(self, key: str, message: str) -> None:
+        self.key = key
+        self.message = message
 
     def __repr__(self) -> str:  # pragma: no cover
-        return f"PolicyViolation(key={self.key!r}, policy={self.policy!r})"
+        return f"<PolicyViolation key={self.key!r} message={self.message!r}>"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PolicyViolation):
+            return NotImplemented
+        return self.key == other.key and self.message == other.message
 
 
-# Built-in policy predicates
-def _no_empty_values(key: str, value: str) -> Optional[str]:
-    if value.strip() == "":
-        return "value must not be empty or whitespace"
-    return None
+def _no_empty_values(vars_: Dict[str, str]) -> List[str]:
+    return [f"{k}: value must not be empty" for k, v in vars_.items() if v == ""]
 
 
-def _uppercase_keys(key: str, value: str) -> Optional[str]:
-    if key != key.upper():
-        return "key must be uppercase"
-    return None
+def _uppercase_keys(vars_: Dict[str, str]) -> List[str]:
+    return [f"{k}: key must be uppercase" for k in vars_ if k != k.upper()]
 
 
-def _no_spaces_in_keys(key: str, value: str) -> Optional[str]:
-    if " " in key:
-        return "key must not contain spaces"
-    return None
+def _no_spaces_in_keys(vars_: Dict[str, str]) -> List[str]:
+    return [f"{k}: key must not contain spaces" for k in vars_ if " " in k]
 
 
-_BUILTIN_POLICIES: Dict[str, Callable[[str, str], Optional[str]]] = {
+def _no_leading_digit(vars_: Dict[str, str]) -> List[str]:
+    return [f"{k}: key must not start with a digit" for k in vars_ if k and k[0].isdigit()]
+
+
+_POLICIES: Dict[str, Callable[[Dict[str, str]], List[str]]] = {
     "no_empty_values": _no_empty_values,
     "uppercase_keys": _uppercase_keys,
     "no_spaces_in_keys": _no_spaces_in_keys,
+    "no_leading_digit": _no_leading_digit,
 }
 
 
 def available_policies() -> List[str]:
-    """Return names of all built-in policies."""
-    return sorted(_BUILTIN_POLICIES.keys())
+    """Return sorted list of built-in policy names."""
+    return sorted(_POLICIES.keys())
 
 
-def enforce_policy(
-    vars_: Dict[str, str],
-    policies: List[str],
-) -> List[PolicyViolation]:
-    """Run *policies* against *vars_* and return all violations.
+def run_policy(policy_name: str, vars_: Dict[str, str]) -> List[str]:
+    """Run a named policy and return a list of violation messages."""
+    if policy_name not in _POLICIES:
+        raise EnforceError(f"Unknown policy: {policy_name!r}")
+    return _POLICIES[policy_name](vars_)
 
-    Args:
-        vars_: mapping of variable key -> value.
-        policies: list of policy names to apply.
 
-    Returns:
-        List of PolicyViolation instances (empty when compliant).
-
-    Raises:
-        EnforceError: if an unknown policy name is given.
-    """
-    unknown = [p for p in policies if p not in _BUILTIN_POLICIES]
-    if unknown:
-        raise EnforceError(f"Unknown policies: {', '.join(unknown)}")
-
-    violations: List[PolicyViolation] = []
-    for policy_name in policies:
-        check = _BUILTIN_POLICIES[policy_name]
-        for key, value in vars_.items():
-            msg = check(key, value)
-            if msg is not None:
-                violations.append(PolicyViolation(key=key, policy=policy_name, message=msg))
-    return violations
+def run_all_policies(vars_: Dict[str, str]) -> Dict[str, List[str]]:
+    """Run all policies and return a mapping of policy name to violations."""
+    return {name: fn(vars_) for name, fn in _POLICIES.items()}
